@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Ninja System Web</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #111; display: flex; justify-content: center; align-items: center; height: 100vh; color: white; font-family: sans-serif; }
+        canvas { transform: scaleX(-1); border: 2px solid #333; max-width: 100%; box-shadow: 0 0 20px rgba(255,255,255,0.1); }
+        #start-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; justify-content: center; align-items: center; flex-direction: column; z-index: 10; text-align: center;}
+        button { padding: 15px 30px; font-size: 20px; font-weight: bold; background: #ff4757; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 20px;}
+        button:hover { background: #ff6b81; }
+        .hidden { display: none !important; }
+        #loading-text { color: #f1c40f; margin-top: 15px; font-size: 18px; font-weight: bold; }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1632777926/selfie_segmentation.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <div id="start-screen">
+        <h1>ARE YOU READY TO BE</h1>
+        <h2>SHINOBI???</h2>
+        <p>Izinkan akses kamera. Lakukan segel tangan Kagebunshin atau Rasengan!</p>
+        <button id="start-btn">Mulai Sistem</button>
+        <div id="loading-text" class="hidden">Memuat Chakra AI (Mohon Tunggu 10-20 Detik)...</div>
+    </div>
+
+    <video id="video-webcam" style="display: none;" width="640" height="480" autoplay playsinline></video>
+    
+    <video id="vid-asap" class="hidden" src="asap.mp4" loop muted playsinline></video>
+    <video id="vid-rasengan" class="hidden" src="rasengan.mp4" loop muted playsinline></video>
+    <audio id="sfx-jutsu" src="jutsu.mp3"></audio>
+    <audio id="sfx-rasengan" src="rasengan.mp3"></audio>
+
+    <canvas id="output_canvas" width="640" height="480"></canvas>
+
+<script>
+    const videoElement = document.getElementById('video-webcam');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d', { willReadFrequently: true });
+    
+    const vidAsap = document.getElementById('vid-asap');
+    const vidRasengan = document.getElementById('vid-rasengan');
+    const sfxJutsu = document.getElementById('sfx-jutsu');
+    const sfxRasengan = document.getElementById('sfx-rasengan');
+
+    let modeJutsu = null;
+    let startTime = 0;
+    let suaraAktif = false;
+    let lastLandmarks = null;
+
+    function cekSegelKage(lm) {
+        return lm[8].y < lm[6].y && lm[12].y < lm[10].y && lm[16].y > lm[14].y && lm[20].y > lm[18].y;
+    }
+
+    function cekSegelRasengan(lm) {
+        return lm[8].y < lm[6].y && lm[12].y < lm[10].y && lm[16].y < lm[14].y && lm[20].y < lm[18].y;
+    }
+
+    // --- FUNGSI GREEN SCREEN FIX ANTI-KOTAK ---
+    function drawGreenScreenVideo(video, x, y, w, h, isRasengan = false) {
+        if (video.paused || video.ended) return;
+        
+        let tempCanvas = document.createElement('canvas');
+        tempCanvas.width = w; tempCanvas.height = h;
+        let tCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+        
+        if (isRasengan) {
+            let vw = video.videoWidth;
+            let vh = video.videoHeight;
+            let sz = Math.min(vw, vh); 
+            
+            let margin = sz * 0.15; 
+            let cropSz = sz - (margin * 2);
+            let sx = (vw / 2) - (cropSz / 2);
+            let sy = (vh / 2) - (cropSz / 2);
+            
+            tCtx.drawImage(video, sx, sy, cropSz, cropSz, 0, 0, w, h);
+        } else {
+            tCtx.drawImage(video, 0, 0, w, h);
+        }
+        
+        let frame = tCtx.getImageData(0, 0, w, h);
+        let data = frame.data;
+        
+        for (let i = 0; i < data.length; i += 4) {
+            let r = data[i], g = data[i+1], b = data[i+2];
+            if (g > 80 && g > r * 1.1 && g > b * 1.1) { 
+                data[i+3] = 0; // Transparan
+            } else if (isRasengan) {
+                data[i+1] = Math.min(g, Math.max(r, b)); 
+            }
+        }
+        tCtx.putImageData(frame, 0, 0);
+        
+        // --- JURUS POTONG LINGKARAN ---
+        canvasCtx.save(); // Simpan kondisi kanvas sebelum dipotong
+        
+        if (isRasengan) {
+            canvasCtx.beginPath();
+            // Buat jalur lingkaran di titik tengah Rasengan
+            // Dikalikan 0.95 agar memotong sedikit lebih ke dalam (buang sisa sudut)
+            canvasCtx.arc(x + w / 2, y + h / 2, (w / 2) * 0.95, 0, Math.PI * 2);
+            canvasCtx.clip(); // POTONG! Gambar di luar lingkaran ini tidak akan dirender
+            
+            canvasCtx.globalCompositeOperation = 'screen'; // Efek menyala
+        }
+        
+        canvasCtx.drawImage(tempCanvas, x, y);
+        canvasCtx.restore(); // Wajib dikembalikan agar Kagebunshin tidak ikut terpotong
+    }
+
+    const hands = new Hands({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`
+    });
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+
+    const selfieSegmentation = new SelfieSegmentation({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1632777926/${file}`
+    });
+    selfieSegmentation.setOptions({ modelSelection: 1 });
+
+    hands.onResults((results) => {
+        let tanganAktif = false;
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            lastLandmarks = results.multiHandLandmarks[0];
+            if (cekSegelKage(lastLandmarks)) {
+                if (modeJutsu !== 'kage') { modeJutsu = 'kage'; startTime = Date.now(); suaraAktif = false; vidAsap.play(); }
+                tanganAktif = true;
+            } else if (cekSegelRasengan(lastLandmarks)) {
+                if (modeJutsu !== 'rasengan') { modeJutsu = 'rasengan'; startTime = Date.now(); suaraAktif = false; vidRasengan.play(); }
+                tanganAktif = true;
+            }
+        } else {
+            lastLandmarks = null;
+        }
+        
+        if (!tanganAktif) { modeJutsu = null; vidAsap.pause(); vidRasengan.pause(); }
+        selfieSegmentation.send({image: results.image});
+    });
+
+    selfieSegmentation.onResults((results) => {
+        let w = canvasElement.width;
+        let h = canvasElement.height;
+        
+        canvasCtx.globalCompositeOperation = 'source-over';
+        canvasCtx.drawImage(results.image, 0, 0, w, h);
+
+        let durasi = (Date.now() - startTime) / 1000;
+
+        // --- JURUS 1: KAGEBUNSHIN ---
+        if (modeJutsu === 'kage') {
+            if (!suaraAktif) { sfxJutsu.currentTime = 0; sfxJutsu.play(); suaraAktif = true; }
+
+            let tempCanvas = document.createElement('canvas');
+            tempCanvas.width = w; tempCanvas.height = h;
+            let tCtx = tempCanvas.getContext('2d');
+            
+            tCtx.drawImage(results.segmentationMask, 0, 0, w, h);
+            tCtx.globalCompositeOperation = 'source-in';
+            tCtx.drawImage(results.image, 0, 0, w, h);
+
+            let jumlahBunshin = 10;
+            let hb = parseInt(h * 0.50), wb = parseInt(w * 0.50); 
+            let posisi = [];
+
+            for (let i = 0; i < jumlahBunshin; i++) {
+                let isDepan = i >= 5;
+                let kolom = i % 5; 
+                let px = (kolom - 2) * (w * 0.30) + (w/2 - wb/2); 
+                let py = isDepan ? (h - hb + 80) : (h - hb - 30);
+                posisi.push([px, py]);
+            }
+
+            posisi.forEach((pos, i) => {
+                let tm = durasi - (0.05 + i * 0.08); 
+                if (tm > 0) {
+                    canvasCtx.drawImage(tempCanvas, pos[0], pos[1], wb, hb);
+                    drawGreenScreenVideo(vidAsap, pos[0], pos[1], wb, hb);
+                }
+            });
+
+            canvasCtx.drawImage(tempCanvas, 0, 0, w, h);
+        } 
+        
+        // --- JURUS 2: RASENGAN ---
+        else if (modeJutsu === 'rasengan' && lastLandmarks) {
+            if (!suaraAktif) { sfxRasengan.currentTime = 0; sfxRasengan.play(); suaraAktif = true; }
+
+            // Glitch Effect (Dikembalikan!)
+            if (durasi > 0.5 && Math.random() > 0.65) {
+                canvasCtx.fillStyle = "rgba(255, 200, 100, 0.1)";
+                canvasCtx.fillRect(0, 0, w, h);
+                let shift = Math.floor(Math.random() * 10) - 5;
+                canvasCtx.drawImage(canvasElement, shift, 0);
+            }
+
+            let uk = Math.min(130, 60 + (durasi / 1.0) * 70);
+            let cx = lastLandmarks[9].x * w;
+            let cy = lastLandmarks[9].y * h;
+            
+            drawGreenScreenVideo(vidRasengan, cx - uk / 2, cy - uk / 2, uk, uk, true);
+        }
+    });
+
+    const camera = new Camera(videoElement, {
+        onFrame: async () => { await hands.send({image: videoElement}); },
+        width: 640, height: 480
+    });
+
+    document.getElementById('start-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('start-btn');
+        const loadingText = document.getElementById('loading-text');
+        
+        btn.style.display = 'none'; 
+        loadingText.classList.remove('hidden'); 
+
+        try {
+            await hands.initialize();
+            await selfieSegmentation.initialize();
+            document.getElementById('start-screen').classList.add('hidden');
+            camera.start();
+        } catch (error) {
+            console.error(error);
+            loadingText.innerHTML = "Gagal memuat AI. Pastikan internet lancar dan matikan AdBlock.";
+            loadingText.style.color = "red";
+        }
+    });
+
+</script>
+</body>
+</html>
