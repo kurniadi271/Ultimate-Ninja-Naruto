@@ -6,7 +6,16 @@
     <title>Ultimate Ninja System Web</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #111; display: flex; justify-content: center; align-items: center; height: 100vh; color: white; font-family: sans-serif; }
-        canvas { transform: scaleX(-1); border: 2px solid #333; max-width: 100%; box-shadow: 0 0 20px rgba(255,255,255,0.1); }
+        
+        /* --- UPDATE FULL SCREEN DI SINI --- */
+        canvas { 
+            transform: scaleX(-1); 
+            width: 100vw; 
+            height: 100vh; 
+            object-fit: cover; 
+            border: none; 
+        }
+        
         #start-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; justify-content: center; align-items: center; flex-direction: column; z-index: 10; text-align: center;}
         button { padding: 15px 30px; font-size: 20px; font-weight: bold; background: #ff4757; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 20px;}
         button:hover { background: #ff6b81; }
@@ -60,7 +69,6 @@
         return lm[8].y < lm[6].y && lm[12].y < lm[10].y && lm[16].y < lm[14].y && lm[20].y < lm[18].y;
     }
 
-    // --- FUNGSI GREEN SCREEN FIX ANTI-KOTAK ---
     function drawGreenScreenVideo(video, x, y, w, h, isRasengan = false) {
         if (video.paused || video.ended) return;
         
@@ -96,21 +104,18 @@
         }
         tCtx.putImageData(frame, 0, 0);
         
-        // --- JURUS POTONG LINGKARAN ---
-        canvasCtx.save(); // Simpan kondisi kanvas sebelum dipotong
+        canvasCtx.save(); 
         
         if (isRasengan) {
             canvasCtx.beginPath();
-            // Buat jalur lingkaran di titik tengah Rasengan
-            // Dikalikan 0.95 agar memotong sedikit lebih ke dalam (buang sisa sudut)
             canvasCtx.arc(x + w / 2, y + h / 2, (w / 2) * 0.95, 0, Math.PI * 2);
-            canvasCtx.clip(); // POTONG! Gambar di luar lingkaran ini tidak akan dirender
+            canvasCtx.clip(); 
             
-            canvasCtx.globalCompositeOperation = 'screen'; // Efek menyala
+            canvasCtx.globalCompositeOperation = 'screen'; 
         }
         
         canvasCtx.drawImage(tempCanvas, x, y);
-        canvasCtx.restore(); // Wajib dikembalikan agar Kagebunshin tidak ikut terpotong
+        canvasCtx.restore(); 
     }
 
     const hands = new Hands({
@@ -190,7 +195,6 @@
         else if (modeJutsu === 'rasengan' && lastLandmarks) {
             if (!suaraAktif) { sfxRasengan.currentTime = 0; sfxRasengan.play(); suaraAktif = true; }
 
-            // Glitch Effect (Dikembalikan!)
             if (durasi > 0.5 && Math.random() > 0.65) {
                 canvasCtx.fillStyle = "rgba(255, 200, 100, 0.1)";
                 canvasCtx.fillRect(0, 0, w, h);
