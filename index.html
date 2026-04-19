@@ -82,7 +82,6 @@
             let vh = video.videoHeight;
             let sz = Math.min(vw, vh); 
             
-            // Zoom sedikit biar kotaknya nggak kelihatan
             let margin = sz * 0.15; 
             let cropSz = sz - (margin * 2);
             let sx = (vw / 2) - (cropSz / 2);
@@ -98,19 +97,29 @@
         
         for (let i = 0; i < data.length; i += 4) {
             let r = data[i], g = data[i+1], b = data[i+2];
-            // Hanya hapus warna hijau keras, sisa cahayanya biarkan natural
-            if (g > 80 && g > r * 1.1 && g > b * 1.1) { 
-                data[i+3] = 0; // Transparan
-            } 
-            // Baris "else if" yang bikin silau sudah saya hapus di sini
+            
+            if (isRasengan) {
+                // RUMUS BARU UNTUK BACKGROUND HITAM:
+                // Menghitung tingkat kecerahan pixel
+                let brightness = (r + g + b) / 3;
+                
+                // Kalau pixelnya gelap (abu-abu sisa kompresi video YouTube), paksa jadi bolong!
+                // Angka 35 ini bisa kamu naik-turunin. Kalau kotaknya masih kelihatan, naikin jadi 40 atau 50.
+                if (brightness < 35) {
+                    data[i+3] = 0; // Transparan 100%
+                }
+            } else {
+                // RUMUS LAMA UNTUK ASAP (Green Screen)
+                if (g > 80 && g > r * 1.1 && g > b * 1.1) { 
+                    data[i+3] = 0; 
+                } 
+            }
         }
         tCtx.putImageData(frame, 0, 0);
         
         canvasCtx.save(); 
         
         if (isRasengan) {
-            // JURUS POTONG LINGKARAN SUDAH DIHAPUS BIAR NGGAK ADA GARIS BIRU!
-            // Kita cukup pakai Screen Mode biar cahayanya menyatu natural sama background
             canvasCtx.globalCompositeOperation = 'screen'; 
         }
         
