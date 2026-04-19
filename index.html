@@ -69,6 +69,7 @@
         return lm[8].y < lm[6].y && lm[12].y < lm[10].y && lm[16].y < lm[14].y && lm[20].y < lm[18].y;
     }
 
+    // --- FUNGSI GREEN SCREEN FIX ANTI-KOTAK & ANTI-SILAU ---
     function drawGreenScreenVideo(video, x, y, w, h, isRasengan = false) {
         if (video.paused || video.ended) return;
         
@@ -81,6 +82,7 @@
             let vh = video.videoHeight;
             let sz = Math.min(vw, vh); 
             
+            // Zoom sedikit biar kotaknya nggak kelihatan
             let margin = sz * 0.15; 
             let cropSz = sz - (margin * 2);
             let sx = (vw / 2) - (cropSz / 2);
@@ -96,21 +98,19 @@
         
         for (let i = 0; i < data.length; i += 4) {
             let r = data[i], g = data[i+1], b = data[i+2];
+            // Hanya hapus warna hijau keras, sisa cahayanya biarkan natural
             if (g > 80 && g > r * 1.1 && g > b * 1.1) { 
                 data[i+3] = 0; // Transparan
-            } else if (isRasengan) {
-                data[i+1] = Math.min(g, Math.max(r, b)); 
-            }
+            } 
+            // Baris "else if" yang bikin silau sudah saya hapus di sini
         }
         tCtx.putImageData(frame, 0, 0);
         
         canvasCtx.save(); 
         
         if (isRasengan) {
-            canvasCtx.beginPath();
-            canvasCtx.arc(x + w / 2, y + h / 2, (w / 2) * 0.95, 0, Math.PI * 2);
-            canvasCtx.clip(); 
-            
+            // JURUS POTONG LINGKARAN SUDAH DIHAPUS BIAR NGGAK ADA GARIS BIRU!
+            // Kita cukup pakai Screen Mode biar cahayanya menyatu natural sama background
             canvasCtx.globalCompositeOperation = 'screen'; 
         }
         
